@@ -1,0 +1,39 @@
+[prometheus]
+host = '127.0.0.1'
+port = 9090
+
+[[chains]]
+id = 'osmosis-1'
+grpc_addr = 'https://osmosis-grpc.publicnode.com'
+[[chains.channels]]
+port_id = 'transfer'
+channel_id = 'channel-85077'
+destination_chain_id = 'mantra-1'
+min_total = '10'
+refresh = '30s'
+
+[[chains]]
+id = 'noble-1'
+grpc_addr = 'http://noble-grpc.polkachu.com:21590'
+[[chains.channels]]
+port_id = 'transfer'
+channel_id = 'channel-101'
+destination_chain_id = 'mantra-1'
+min_total = '10'
+refresh = '30s'
+
+[[chains]]
+id = 'mantra-1'
+grpc_addr = 'https://grpc.mantrachain.io'
+[[chains.channels]]
+port_id = 'transfer'
+channel_id = 'channel-0'
+destination_chain_id = 'osmosis-1'
+min_total = '10'
+refresh = '30s'
+[[chains.channels]]
+port_id = 'transfer'
+channel_id = 'channel-1'
+destination_chain_id = 'noble-1'
+min_total = '10'
+refresh = '30s'

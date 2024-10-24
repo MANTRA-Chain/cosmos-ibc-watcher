@@ -1,0 +1,29 @@
+[prometheus]
+host = '127.0.0.1'
+port = 9090
+reset = '1800s'
+
+[[chains]]
+id = 'chain_A'
+grpc_addr = 'http://127.0.0.1:9090'
+[[chains.channels]]
+port_id = 'transfer'
+channel_id = 'channel-0'
+destination_chain_id = 'devnet-1'
+min_total = '20'
+refresh = '300s'
+[[chains.channels]]
+port_id = 'transfer'
+channel_id = 'channel-0'
+destination_chain_id = 'devnet-1'
+min_total = '20'
+
+[[chains]]
+id = 'chain_B'
+grpc_addr = 'http://127.0.0.1:9090'
+[[chains.channels]]
+port_id = 'transfer'
+channel_id = 'channel-0'
+destination_chain_id = 'devnet-1'
+min_total = 'sth100000000000000000000000000000000000000000000000000000000000'
+refresh = '300s'
