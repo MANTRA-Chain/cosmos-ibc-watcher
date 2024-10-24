@@ -33,7 +33,7 @@ jobs:
     - uses: mantra-chain-tech/infra-github-actions-mantrachain/docker-buildx-v1@main
       with:
         container_repository: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-        build_context: ./backend
+        build_context: ./
         build_args: ${{ env.BUILD_ARGS }}
         registry: ${{ env.REGISTRY }}
         registry_username: ${{ github.actor }}
