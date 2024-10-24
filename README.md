@@ -1,6 +1,6 @@
 # Cosmos IBC Watcher 🧑🏻‍🏭
 
-Query balance for cosmos-sdk chains, and expose account balance status as prometheus metrics.
+Query ibc packet commitments for cosmos-sdk chains, and expose status as prometheus metrics.
 One can send alert based on prometheus alerting rules.
 
 ## Build

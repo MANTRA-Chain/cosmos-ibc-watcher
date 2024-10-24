@@ -3,7 +3,7 @@ use http::uri::Uri;
 use ibc_proto::cosmos::base::query::v1beta1::PageRequest;
 use ibc_proto::ibc::core::channel::v1::{query_client::QueryClient, QueryPacketCommitmentsRequest};
 
-/// Fetches on-chain balance of given port_id, channel_id and chain
+/// Fetches on-chain data of given port_id, channel_id and chain
 pub async fn get_packet_commitments_total(
     port_id: String,
     channel_id: String,
