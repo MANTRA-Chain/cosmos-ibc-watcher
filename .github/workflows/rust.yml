@@ -20,9 +20,9 @@ jobs:
           - stable
     steps:
       - name: Checkout branch
-      - uses: actions/checkout@v4
+        uses: actions/checkout@v4
       - name: Setup toolchain
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: ${{ matrix.rust }}
       - name: Set up Rust caches
@@ -60,5 +60,5 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-      - name: Run Carglo Clippy
+      - name: Run Cargo Clippy
         run: cargo clippy
