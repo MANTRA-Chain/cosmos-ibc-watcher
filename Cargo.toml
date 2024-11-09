@@ -16,17 +16,16 @@ eyre_tracer = ["flex-error/eyre_tracer"]
 
 [dependencies]
 structopt = "0.3"
-serde_derive = "1.0.130"
+serde_derive = "1.0.214"
 humantime-serde = "1.0.0"
-anyhow = "1.0.45"
+anyhow = "1.0.93"
 tower = "0.5.1"
 http = "1.1.0"
 http-body = "1.0.1"
 prost = "0.13.3"
 tonic = { version = "0.12.3", features = ["tls", "tls-roots"] }
-tokio = { version = "1.15.0", features = ["full"] }
+tokio = { version = "1.41.1", features = ["full"] }
 warp = "0.3"
-# prometheus = { git = "https://github.com/tikv/rust-prometheus", rev = "ac86a264223c8d918a43e739ca3c48bb4aaedb90", features = ["process"] }
 prometheus = { version = "0.13.4", features = ["process"] }
 lazy_static = "1.4"
 futures = { version = "0.3", default-features = false }

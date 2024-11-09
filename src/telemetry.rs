@@ -25,7 +25,7 @@ lazy_static! {
     )
     .expect("metric can be created");
     pub static ref IBC_CLIENT_TIME_BEFORE_EXPIRE_COLLECTOR: IntGaugeVec = IntGaugeVec::new(
-        Opts::new("ibc_client_time_before_expire", "the times left before client reach min_time_before_client_expiration in seconds"),
+        Opts::new("ibc_client_time_before_expire", "the times left before client reach ibc client expiration in seconds"),
         &["chain_id", "port_id", "channel_id", "destination_chain_id", "min_time_before_client_expiration"]
     )
     .expect("metric can be created");

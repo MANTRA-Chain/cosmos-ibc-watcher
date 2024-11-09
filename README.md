@@ -61,12 +61,12 @@ ibc_client_status{chain_id="mantra-1",channel_id="channel-0",destination_chain_i
 ibc_client_status{chain_id="mantra-1",channel_id="channel-1",destination_chain_id="noble-1",min_time_before_client_expiration="403200",port_id="transfer"} 0
 ibc_client_status{chain_id="noble-1",channel_id="channel-101",destination_chain_id="mantra-1",min_time_before_client_expiration="307200",port_id="transfer"} 0
 ibc_client_status{chain_id="osmosis-1",channel_id="channel-85077",destination_chain_id="mantra-1",min_time_before_client_expiration="307200",port_id="transfer"} 0
-# HELP ibc_client_time_before_expire the times left before client expire in seconds
+# HELP ibc_client_time_before_expire the times left before client reach ibc client expiration in seconds
 # TYPE ibc_client_time_before_expire gauge
-ibc_client_time_before_expire{chain_id="mantra-1",channel_id="channel-0",destination_chain_id="osmosis-1",min_time_before_client_expiration="537600",port_id="transfer"} 536515
-ibc_client_time_before_expire{chain_id="mantra-1",channel_id="channel-1",destination_chain_id="noble-1",min_time_before_client_expiration="403200",port_id="transfer"} 364496
-ibc_client_time_before_expire{chain_id="noble-1",channel_id="channel-101",destination_chain_id="mantra-1",min_time_before_client_expiration="307200",port_id="transfer"} 306919
-ibc_client_time_before_expire{chain_id="osmosis-1",channel_id="channel-85077",destination_chain_id="mantra-1",min_time_before_client_expiration="307200",port_id="transfer"} 306123
+ibc_client_time_before_expire{chain_id="mantra-1",channel_id="channel-0",destination_chain_id="osmosis-1",min_time_before_client_expiration="537600s",port_id="transfer"} 806317
+ibc_client_time_before_expire{chain_id="mantra-1",channel_id="channel-1",destination_chain_id="noble-1",min_time_before_client_expiration="403200s",port_id="transfer"} 1208147
+ibc_client_time_before_expire{chain_id="noble-1",channel_id="channel-101",destination_chain_id="mantra-1",min_time_before_client_expiration="307200s",port_id="transfer"} 457449
+ibc_client_time_before_expire{chain_id="osmosis-1",channel_id="channel-85077",destination_chain_id="mantra-1",min_time_before_client_expiration="307200s",port_id="transfer"} 460723
 # HELP ibc_count no of ibc packet commitments
 # TYPE ibc_count gauge
 ibc_count{chain_id="mantra-1",channel_id="channel-0",destination_chain_id="osmosis-1",min_total="10",port_id="transfer"} 0
