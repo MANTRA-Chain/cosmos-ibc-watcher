@@ -64,6 +64,7 @@ pub struct Channel {
     pub port_id: String,
     pub channel_id: String,
     pub destination_chain_id: String,
+    pub min_time_before_client_expiration: Option<String>,
     pub min_total: String,
     #[serde(default = "default::refresh", with = "humantime_serde")]
     pub refresh: Duration,

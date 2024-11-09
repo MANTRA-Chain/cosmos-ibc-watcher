@@ -12,6 +12,8 @@ extern crate more_asserts;
 
 pub mod config;
 pub mod error;
+pub mod handle;
 pub mod query;
+pub mod telemetry;
 
 pub const DEFAULT_CONFIG_PATH: &str = "chains.toml";
