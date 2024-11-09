@@ -27,4 +27,5 @@ port_id = 'transfer'
 channel_id = 'channel-33'
 destination_chain_id = 'testnet-1'
 min_total = '20'
+min_time_before_client_expiration = '537600s' # default is 1/3 trusting_period
 refresh = '300s'

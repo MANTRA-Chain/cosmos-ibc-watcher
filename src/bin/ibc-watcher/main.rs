@@ -1,36 +1,17 @@
-#[macro_use]
-extern crate lazy_static;
-use cosmos_ibc_watcher::{config, query, DEFAULT_CONFIG_PATH};
+use cosmos_ibc_watcher::{
+    config,
+    handle::ibc_status_collector,
+    telemetry::{metrics_handler, register_custom_metrics},
+    DEFAULT_CONFIG_PATH,
+};
 use env_logger::Builder;
-use log::{error, info, warn, LevelFilter};
-use prometheus::{IntGaugeVec, Opts, Registry};
+use log::{error, info, LevelFilter};
 use std::net::Ipv4Addr;
 use std::path::PathBuf;
 use std::result::Result;
 use std::str::FromStr;
 use structopt::StructOpt;
-use tendermint_rpc::Url;
-use warp::{Filter, Rejection, Reply};
-
-lazy_static! {
-    pub static ref IBC_STATUS_COLLECTOR: IntGaugeVec = IntGaugeVec::new(
-        Opts::new("ibc_status", "IBC Status. 0: < min_total, 1: > min_total"),
-        &["chain_id", "port_id", "channel_id", "destination_chain_id", "min_total"]
-    )
-    .expect("metric can be created");
-    pub static ref IBC_COUNT_COLLECTOR: IntGaugeVec = IntGaugeVec::new(
-        Opts::new("ibc_count", "no of ibc packet commitments"),
-        &["chain_id", "port_id", "channel_id", "destination_chain_id", "min_total"]
-    )
-    .expect("metric can be created");
-    pub static ref IBC_QUERY_STATUS_COLLECTOR: IntGaugeVec = IntGaugeVec::new(
-        Opts::new("ibc_query_status", "IBC Query Status show the ibc total query is successful or not. 0: can access, 1: cannot access"),
-        &["chain_id", "port_id", "channel_id", "destination_chain_id", "min_total"]
-    )
-    .expect("metric can be created");
-
-    pub static ref REGISTRY: Registry = Registry::new();
-}
+use warp::Filter;
 
 /// Helper sub-commands
 #[derive(Debug, StructOpt)]
@@ -90,156 +71,4 @@ async fn start(config_path: Option<PathBuf>) -> Result<(), Box<dyn std::error::E
             .await;
         Ok(())
     }
-}
-
-fn register_custom_metrics() {
-    REGISTRY
-        .register(Box::new(IBC_STATUS_COLLECTOR.clone()))
-        .expect("collector can be registered");
-    REGISTRY
-        .register(Box::new(IBC_COUNT_COLLECTOR.clone()))
-        .expect("collector can be registered");
-    REGISTRY
-        .register(Box::new(IBC_QUERY_STATUS_COLLECTOR.clone()))
-        .expect("collector can be registered");
-}
-
-async fn ibc_status_collector(config: config::Config) {
-    for chain_config in config.chains.iter() {
-        let grpc_addr = chain_config.grpc_addr.clone();
-        let chain_id = chain_config.id.clone();
-        for chain_channel in chain_config.channels.clone().iter() {
-            tokio::task::spawn(track_ibc_status(
-                grpc_addr.clone(),
-                chain_id.clone(),
-                chain_channel.clone(),
-            ));
-        }
-    }
-    if let Some(interval) = config.prometheus.reset {
-        let mut reset_interval = tokio::time::interval(interval);
-        loop {
-            reset_interval.tick().await;
-            info!("reset metrics!");
-            IBC_STATUS_COLLECTOR.reset();
-            IBC_COUNT_COLLECTOR.reset();
-            IBC_QUERY_STATUS_COLLECTOR.reset();
-        }
-    }
-}
-
-async fn track_ibc_status(gprc_addr: Url, chain_id: String, chain_channel: config::Channel) {
-    let port_id = &chain_channel.port_id;
-    let channel_id = &chain_channel.channel_id;
-    let destination_chain_id = &chain_channel.destination_chain_id;
-    let refresh = &chain_channel.refresh;
-    let min_total = &chain_channel.min_total;
-    let mut total: u64;
-    let mut collect_interval = tokio::time::interval(refresh.to_owned());
-
-    loop {
-        collect_interval.tick().await;
-        total = match query::get_packet_commitments_total(
-            port_id.into(),
-            channel_id.into(),
-            gprc_addr.to_string(),
-        )
-        .await
-        {
-            Ok(total) => {
-                IBC_QUERY_STATUS_COLLECTOR
-                    .with_label_values(&[
-                        &chain_id.clone(),
-                        port_id,
-                        channel_id,
-                        destination_chain_id,
-                        min_total,
-                    ])
-                    .set(0);
-                total
-            }
-            Err(error) => {
-                error!("{} and retry next refresh", error);
-                IBC_QUERY_STATUS_COLLECTOR
-                    .with_label_values(&[
-                        &chain_id.clone(),
-                        port_id,
-                        channel_id,
-                        destination_chain_id,
-                        min_total,
-                    ])
-                    .set(1);
-                continue;
-            }
-        };
-        info!(
-            "The latest total={} with channel_id ({}) with destination_chain_id {} on ({})",
-            total, channel_id, destination_chain_id, chain_id
-        );
-        if total < min_total.parse::<u64>().unwrap() {
-            IBC_STATUS_COLLECTOR
-                .with_label_values(&[
-                    &chain_id.clone(),
-                    port_id,
-                    channel_id,
-                    destination_chain_id,
-                    min_total,
-                ])
-                .set(0);
-        } else {
-            warn!("The current total {} with channel_id ({}) is higher than {} with destination_chain_id {} on ({})", total, channel_id, min_total, destination_chain_id, chain_id);
-            IBC_STATUS_COLLECTOR
-                .with_label_values(&[
-                    &chain_id.clone(),
-                    port_id,
-                    channel_id,
-                    destination_chain_id,
-                    min_total,
-                ])
-                .set(1);
-        }
-        IBC_COUNT_COLLECTOR
-            .with_label_values(&[
-                &chain_id.clone(),
-                port_id,
-                channel_id,
-                destination_chain_id,
-                min_total,
-            ])
-            .set(total as i64);
-    }
-}
-
-async fn metrics_handler() -> Result<impl Reply, Rejection> {
-    use prometheus::Encoder;
-    let encoder = prometheus::TextEncoder::new();
-
-    let mut buffer = Vec::new();
-    if let Err(e) = encoder.encode(&REGISTRY.gather(), &mut buffer) {
-        error!("could not encode custom metrics: {:?}", e);
-    };
-    let mut res = match String::from_utf8(buffer.clone()) {
-        Ok(v) => v,
-        Err(e) => {
-            error!("custom metrics could not be from_utf8'd: {}", e);
-            String::default()
-        }
-    };
-    buffer.clear();
-
-    let mut buffer = Vec::new();
-    if let Err(e) = encoder.encode(&prometheus::gather(), &mut buffer) {
-        error!("could not encode prometheus metrics: {:?}", e);
-    };
-    let res_custom = match String::from_utf8(buffer.clone()) {
-        Ok(v) => v,
-        Err(e) => {
-            error!("prometheus metrics could not be from_utf8'd: {}", e);
-            String::default()
-        }
-    };
-    buffer.clear();
-
-    res.push_str(&res_custom);
-    Ok(res)
 }

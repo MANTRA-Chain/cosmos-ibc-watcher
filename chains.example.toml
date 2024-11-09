@@ -9,6 +9,7 @@ grpc_addr = 'https://osmosis-grpc.publicnode.com'
 port_id = 'transfer'
 channel_id = 'channel-85077'
 destination_chain_id = 'mantra-1'
+min_time_before_client_expiration = '307200s' # default is 1/3 trusting_period
 min_total = '10'
 refresh = '30s'
 
@@ -19,6 +20,7 @@ grpc_addr = 'http://noble-grpc.polkachu.com:21590'
 port_id = 'transfer'
 channel_id = 'channel-101'
 destination_chain_id = 'mantra-1'
+min_time_before_client_expiration = '307200s' # default is 1/3 trusting_period
 min_total = '10'
 refresh = '30s'
 
@@ -29,6 +31,7 @@ grpc_addr = 'https://grpc.mantrachain.io'
 port_id = 'transfer'
 channel_id = 'channel-0'
 destination_chain_id = 'osmosis-1'
+min_time_before_client_expiration = '537600s' # default is 1/3 trusting_period
 min_total = '10'
 refresh = '30s'
 [[chains.channels]]

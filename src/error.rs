@@ -31,5 +31,15 @@ define_error! {
             |_| { format_args!(
                 "error in getting packet commitments total")
             },
+
+        GetChannelClientState
+            |_| { format_args!(
+                "error in getting channel client state")
+            },
+
+        GetChannelConsensusState
+            |_| { format_args!(
+                "error in getting channel consensus state")
+            },
     }
 }

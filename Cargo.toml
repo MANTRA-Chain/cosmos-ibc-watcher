@@ -38,8 +38,10 @@ env_logger = "0.11"
 flex-error = { version = "0.4.2", default-features = false }
 toml = "0.8"
 tracing = "0.1.26"
-cosmos-sdk-proto = "0.25.0"
-ibc-proto = "0.50"
+ibc-proto = { version = "0.47.1", features = ["serde"] }
+ibc-relayer = "0.29.3"
+ibc-relayer-types = "0.29.3"
+duration-str = "0.11.2"
 
 [dependencies.tendermint-rpc]
 version = "=0.40.0"
