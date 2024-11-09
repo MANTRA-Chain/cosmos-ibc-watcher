@@ -1,7 +1,13 @@
 # Cosmos IBC Watcher 🧑🏻‍🏭
 
-Query ibc packet commitments for cosmos-sdk chains, and expose status as prometheus metrics.
-One can send alert based on prometheus alerting rules.
+This project monitors IBC (Inter-Blockchain Communication) packet commitments for Cosmos-SDK chains and exposes their status as Prometheus metrics. It allows users to track the number of unrelayed IBC packet commitments and the status of IBC clients, providing insights into the health and performance of IBC channels.
+
+## Features
+
+- **IBC Packet Commitments Monitoring**: Track the total number of unrelayed IBC packet commitments for each channel.
+- **IBC Client Status Monitoring**: Monitor the time left before IBC clients expire and their current status.
+- **Prometheus Metrics**: Expose IBC metrics in a format compatible with Prometheus for easy integration with monitoring and alerting systems.
+- **Grafana Dashboard**: A pre-configured Grafana dashboard to visualize the IBC metrics.
 
 ## Build
 
@@ -86,3 +92,6 @@ ibc_status{chain_id="mantra-1",channel_id="channel-1",destination_chain_id="nobl
 ibc_status{chain_id="noble-1",channel_id="channel-101",destination_chain_id="mantra-1",min_total="10",port_id="transfer"} 0
 ibc_status{chain_id="osmosis-1",channel_id="channel-85077",destination_chain_id="mantra-1",min_total="10",port_id="transfer"} 0
 ```
+
+Grafana Dashboard
+A pre-configured Grafana dashboard is available to visualize the IBC metrics. Import the [ibc-watcher.json](./grafana/ibc-watcher.json) file into your Grafana instance to get started.
