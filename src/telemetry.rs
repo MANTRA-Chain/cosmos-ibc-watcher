@@ -30,6 +30,12 @@ lazy_static! {
     )
     .expect("metric can be created");
 
+    pub static ref IBC_QUERY_NODE_SYNC_STATUS_COLLECTOR: IntGaugeVec = IntGaugeVec::new(
+        Opts::new("ibc_query_node_sync_status", "IBC query node sync status. 0: blockheight is moving, 1: blockheight is not synced"),
+        &["chain_id"]
+    )
+    .expect("metric can be created");
+
     pub static ref REGISTRY: Registry = Registry::new();
 }
 
@@ -71,6 +77,24 @@ pub fn ibc_count_setter(
             min_total,
         ])
         .set(count);
+}
+
+#[allow(unused_must_use)]
+/// A remover for IBC_COUNT_COLLECTOR, make sure all the labels are set and types are correct
+pub fn ibc_count_remover(
+    chain_id: &str,
+    port_id: &str,
+    channel_id: &str,
+    destination_chain_id: &str,
+    min_total: &str,
+) {
+    IBC_COUNT_COLLECTOR.remove_label_values(&[
+        chain_id,
+        port_id,
+        channel_id,
+        destination_chain_id,
+        min_total,
+    ]);
 }
 
 /// A setter for IBC_QUERY_STATUS_COLLECTOR, make sure all the labels are set and types are correct
@@ -133,6 +157,13 @@ pub fn ibc_client_time_before_expire_setter(
         .set(time_before_expire);
 }
 
+/// A setter for IBC_QUERY_NODE_SYNC_STATUS_COLLECTOR, make sure all the labels are set and types are correct
+pub fn ibc_query_node_sync_status_setter(chain_id: &str, status: i64) {
+    IBC_QUERY_NODE_SYNC_STATUS_COLLECTOR
+        .with_label_values(&[chain_id])
+        .set(status);
+}
+
 pub fn register_custom_metrics() {
     REGISTRY
         .register(Box::new(IBC_STATUS_COLLECTOR.clone()))
@@ -148,6 +179,9 @@ pub fn register_custom_metrics() {
         .expect("collector can be registered");
     REGISTRY
         .register(Box::new(IBC_CLIENT_TIME_BEFORE_EXPIRE_COLLECTOR.clone()))
+        .expect("collector can be registered");
+    REGISTRY
+        .register(Box::new(IBC_QUERY_NODE_SYNC_STATUS_COLLECTOR.clone()))
         .expect("collector can be registered");
 }
 

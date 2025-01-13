@@ -1,10 +1,14 @@
 use anyhow::Result;
 use http::uri::Uri;
 use ibc_proto::cosmos::base::query::v1beta1::PageRequest;
+use ibc_proto::cosmos::base::tendermint::v1beta1::{
+    service_client::ServiceClient, GetLatestBlockRequest,
+};
 use ibc_proto::ibc::core::channel::v1::{
     query_client::QueryClient, QueryChannelClientStateRequest, QueryChannelConsensusStateRequest,
     QueryPacketCommitmentsRequest,
 };
+
 use ibc_relayer::client_state::IdentifiedAnyClientState;
 use ibc_relayer::consensus_state::AnyConsensusState;
 use ibc_relayer_types::Height;
@@ -117,6 +121,22 @@ pub async fn get_latest_channel_client_consensus_state_duration(
     ))
 }
 
+/// fetches the latest block height of the chain
+pub async fn get_latest_height(grpc_addr: String) -> Result<i64> {
+    let mut query_client =
+        create_grpc_client(grpc_addr.parse::<Uri>()?, ServiceClient::new).await?;
+
+    Ok(query_client
+        .get_latest_block(GetLatestBlockRequest {})
+        .await?
+        .into_inner()
+        .block
+        .ok_or_else(crate::error::Error::get_latest_block)?
+        .header
+        .ok_or_else(crate::error::Error::get_latest_block)?
+        .height)
+}
+
 /// Helper function to create a gRPC client.
 pub async fn create_grpc_client<T>(
     grpc_addr: Uri,
@@ -191,5 +211,13 @@ mod tests {
         .unwrap();
         println!("{:?}", duration);
         assert_ge!(duration.as_secs(), 0);
+    }
+
+    #[actix_rt::test]
+    async fn test_get_latest_height() {
+        let grpc_addr = "https://grpc.mantrachain.io".to_string();
+        let height = get_latest_height(grpc_addr).await.unwrap();
+        println!("{:?}", height);
+        assert_ge!(height, 0);
     }
 }

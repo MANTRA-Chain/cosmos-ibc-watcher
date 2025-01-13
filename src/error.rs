@@ -41,5 +41,10 @@ define_error! {
             |_| { format_args!(
                 "error in getting channel consensus state")
             },
+
+        GetLatestBlock
+            |_| { format_args!(
+                "error in getting latest block")
+            },
     }
 }

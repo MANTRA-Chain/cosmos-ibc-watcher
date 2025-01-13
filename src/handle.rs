@@ -2,18 +2,25 @@ use crate::{config, query, telemetry::*};
 use duration_str::parse;
 use ibc_relayer_types::Height;
 use log::{error, info, warn};
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 use tendermint_rpc::Url;
 
 pub async fn ibc_status_collector(config: config::Config) {
     for chain_config in config.chains.iter() {
         let grpc_addr = chain_config.grpc_addr.clone();
         let chain_id = chain_config.id.clone();
+        let halt = Arc::new(tokio::sync::Mutex::new(false));
+        tokio::task::spawn(track_query_node_sync_status(
+            grpc_addr.clone(),
+            chain_id.clone(),
+            halt.clone(),
+        ));
         for chain_channel in chain_config.channels.clone().iter() {
             tokio::task::spawn(track_ibc_status(
                 grpc_addr.clone(),
                 chain_id.clone(),
                 chain_channel.clone(),
+                halt.clone(),
             ));
             tokio::task::spawn(track_ibc_client_status(
                 grpc_addr.clone(),
@@ -252,7 +259,12 @@ fn update_ibc_client_status(
     }
 }
 
-pub async fn track_ibc_status(grpc_addr: Url, chain_id: String, chain_channel: config::Channel) {
+pub async fn track_ibc_status(
+    grpc_addr: Url,
+    chain_id: String,
+    chain_channel: config::Channel,
+    halt: Arc<tokio::sync::Mutex<bool>>,
+) {
     let port_id = &chain_channel.port_id;
     let channel_id = &chain_channel.channel_id;
     let destination_chain_id = &chain_channel.destination_chain_id;
@@ -263,6 +275,17 @@ pub async fn track_ibc_status(grpc_addr: Url, chain_id: String, chain_channel: c
 
     loop {
         collect_interval.tick().await;
+        if *halt.lock().await {
+            // remove the metrics to avoid false alarms
+            ibc_count_remover(
+                &chain_id,
+                port_id,
+                channel_id,
+                destination_chain_id,
+                min_total,
+            );
+            continue;
+        }
         total = match query::get_packet_commitments_total(
             port_id.into(),
             channel_id.into(),
@@ -326,5 +349,38 @@ pub async fn track_ibc_status(grpc_addr: Url, chain_id: String, chain_channel: c
             min_total,
             total.try_into().unwrap(),
         );
+    }
+}
+
+pub async fn track_query_node_sync_status(
+    grpc_addr: Url,
+    chain_id: String,
+    halt: Arc<tokio::sync::Mutex<bool>>,
+) {
+    let refresh = Duration::from_secs(60);
+    let mut collect_interval = tokio::time::interval(refresh.to_owned());
+    let mut last_height = 0;
+
+    loop {
+        collect_interval.tick().await;
+
+        let current_height = match query::get_latest_height(grpc_addr.to_string()).await {
+            Ok(height) => height,
+            Err(e) => {
+                error!("{} and retry next refresh", e);
+                continue;
+            }
+        };
+
+        if current_height > last_height {
+            last_height = current_height;
+            // set the halt to false
+            *halt.lock().await = false;
+            ibc_query_node_sync_status_setter(&chain_id, 0);
+        } else {
+            // set the halt to true, it should stop other tasks to avoid unnecessary alerts coz the commitments are not increasing which could give false alarms
+            *halt.lock().await = true;
+            ibc_query_node_sync_status_setter(&chain_id, 1);
+        }
     }
 }

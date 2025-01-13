@@ -49,7 +49,7 @@ jobs:
           toolchain: stable
           override: true
       - name: Run Rust fmt
-        run: cargo fmt
+        run: cargo fmt --all -- --check
   clippy:
     name: Clippy
     runs-on: ubuntu-latest-x64-xlarge

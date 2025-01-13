@@ -79,6 +79,11 @@ ibc_count{chain_id="mantra-1",channel_id="channel-0",destination_chain_id="osmos
 ibc_count{chain_id="mantra-1",channel_id="channel-1",destination_chain_id="noble-1",min_total="10",port_id="transfer"} 0
 ibc_count{chain_id="noble-1",channel_id="channel-101",destination_chain_id="mantra-1",min_total="10",port_id="transfer"} 0
 ibc_count{chain_id="osmosis-1",channel_id="channel-85077",destination_chain_id="mantra-1",min_total="10",port_id="transfer"} 1
+# HELP ibc_node_sync_status IBC node sync status. 0: blockheight is moving, 1: blockheight is not synced
+# TYPE ibc_node_sync_status gauge
+ibc_node_sync_status{chain_id="mantra-1"} 0
+ibc_node_sync_status{chain_id="noble-1"} 0
+ibc_node_sync_status{chain_id="osmosis-1"} 0
 # HELP ibc_query_status IBC Query Status show the ibc total query is successful or not. 0: can access, 1: cannot access
 # TYPE ibc_query_status gauge
 ibc_query_status{chain_id="mantra-1",channel_id="channel-0",destination_chain_id="osmosis-1",min_total="10",port_id="transfer"} 0
