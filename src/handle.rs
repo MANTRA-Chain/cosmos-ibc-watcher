@@ -46,6 +46,29 @@ pub async fn ibc_status_collector(config: config::Config) {
     }
 }
 
+/// Records the query status gauge for every endpoint attempted, not just the
+/// one that produced the final result. Without this, an endpoint that failed
+/// before a later endpoint succeeded would keep a stale "healthy" (0)
+/// reading in Prometheus indefinitely.
+fn record_query_attempts(
+    attempts: &[(String, bool)],
+    chain_id: &str,
+    port_id: &str,
+    channel_id: &str,
+    destination_chain_id: &str,
+) {
+    for (grpc_addr, succeeded) in attempts {
+        ibc_query_status_setter(
+            chain_id,
+            port_id,
+            channel_id,
+            destination_chain_id,
+            grpc_addr,
+            if *succeeded { 0 } else { 1 },
+        );
+    }
+}
+
 pub async fn track_ibc_client_status(
     grpc_addrs: Arc<Vec<String>>,
     chain_id: String,
@@ -71,29 +94,20 @@ pub async fn track_ibc_client_status(
             info!("The trusting_period is not set, fetching from the chain");
             let outcome =
                 query::get_trusting_period(port_id.into(), channel_id.into(), &grpc_addrs).await;
+            record_query_attempts(
+                &outcome.attempts,
+                &chain_id,
+                port_id,
+                channel_id,
+                destination_chain_id,
+            );
             trusting_period = match outcome.result {
                 Ok(d) => {
-                    ibc_query_status_setter(
-                        &chain_id,
-                        port_id,
-                        channel_id,
-                        destination_chain_id,
-                        &outcome.grpc_addr,
-                        0,
-                    );
                     info!("The trusting_period={:?} with channel_id ({}) with destination_chain_id {} on ({})", d, channel_id, destination_chain_id, chain_id);
                     Some(d)
                 }
                 Err(e) => {
                     error!("{} and retry next refresh", e);
-                    ibc_query_status_setter(
-                        &chain_id,
-                        port_id,
-                        channel_id,
-                        destination_chain_id,
-                        &outcome.grpc_addr,
-                        1,
-                    );
                     continue;
                 }
             }
@@ -110,28 +124,17 @@ pub async fn track_ibc_client_status(
             &grpc_addrs,
         )
         .await;
+        record_query_attempts(
+            &outcome.attempts,
+            &chain_id,
+            port_id,
+            channel_id,
+            destination_chain_id,
+        );
         let channel_client_state_height = match outcome.result {
-            Ok(height) => {
-                ibc_query_status_setter(
-                    &chain_id,
-                    port_id,
-                    channel_id,
-                    destination_chain_id,
-                    &outcome.grpc_addr,
-                    0,
-                );
-                height
-            }
+            Ok(height) => height,
             Err(e) => {
                 error!("{} and retry next refresh", e);
-                ibc_query_status_setter(
-                    &chain_id,
-                    port_id,
-                    channel_id,
-                    destination_chain_id,
-                    &outcome.grpc_addr,
-                    1,
-                );
                 continue;
             }
         };
@@ -146,16 +149,15 @@ pub async fn track_ibc_client_status(
                 &grpc_addrs,
             )
             .await;
+            record_query_attempts(
+                &outcome.attempts,
+                &chain_id,
+                port_id,
+                channel_id,
+                destination_chain_id,
+            );
             let channel_client_consensus_state_duration = match outcome.result {
                 Ok(duration) => {
-                    ibc_query_status_setter(
-                        &chain_id,
-                        port_id,
-                        channel_id,
-                        destination_chain_id,
-                        &outcome.grpc_addr,
-                        0,
-                    );
                     info!(
                         "The channel_client_consensus_state_duration={:?} with channel_id ({}) with destination_chain_id {} on ({})",
                         duration, channel_id, destination_chain_id, chain_id
@@ -165,14 +167,6 @@ pub async fn track_ibc_client_status(
                 }
                 Err(e) => {
                     error!("{} and retry next refresh", e);
-                    ibc_query_status_setter(
-                        &chain_id,
-                        port_id,
-                        channel_id,
-                        destination_chain_id,
-                        &outcome.grpc_addr,
-                        1,
-                    );
                     continue;
                 }
             };
@@ -289,28 +283,17 @@ pub async fn track_ibc_status(
         let outcome =
             query::get_packet_commitments_total(port_id.into(), channel_id.into(), &grpc_addrs)
                 .await;
+        record_query_attempts(
+            &outcome.attempts,
+            &chain_id,
+            port_id,
+            channel_id,
+            destination_chain_id,
+        );
         total = match outcome.result {
-            Ok(total) => {
-                ibc_query_status_setter(
-                    &chain_id,
-                    port_id,
-                    channel_id,
-                    destination_chain_id,
-                    &outcome.grpc_addr,
-                    0,
-                );
-                total
-            }
+            Ok(total) => total,
             Err(e) => {
                 error!("{} and retry next refresh", e);
-                ibc_query_status_setter(
-                    &chain_id,
-                    port_id,
-                    channel_id,
-                    destination_chain_id,
-                    &outcome.grpc_addr,
-                    1,
-                );
                 continue;
             }
         };
@@ -357,6 +340,7 @@ pub async fn track_query_node_sync_status(
     let refresh = Duration::from_secs(60);
     let mut collect_interval = tokio::time::interval(refresh.to_owned());
     let mut last_height = 0;
+    let mut last_grpc_addr: Option<String> = None;
 
     loop {
         collect_interval.tick().await;
@@ -373,8 +357,21 @@ pub async fn track_query_node_sync_status(
             }
         };
 
-        if current_height > last_height {
+        // A different endpoint may have answered this tick after failover.
+        // Endpoints can lag each other slightly, so a same-or-lower height
+        // from a newly active endpoint isn't evidence of a stalled chain —
+        // only treat it as a stall once the *same* endpoint stops advancing.
+        let endpoint_switched = last_grpc_addr.as_deref() != Some(outcome.grpc_addr.as_str());
+
+        if endpoint_switched || current_height > last_height {
+            if endpoint_switched {
+                info!(
+                    "node sync check for ({}) switched to endpoint {}; skipping halt comparison for this tick",
+                    chain_id, outcome.grpc_addr
+                );
+            }
             last_height = current_height;
+            last_grpc_addr = Some(outcome.grpc_addr.clone());
             // set the halt to false
             *halt.lock().await = false;
             ibc_query_node_sync_status_setter(&chain_id, 0);

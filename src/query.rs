@@ -15,39 +15,64 @@ use ibc_relayer::consensus_state::AnyConsensusState;
 use ibc_relayer_types::Height;
 use std::time::Duration;
 
+/// Maximum time allowed for a single endpoint attempt (connect + call)
+/// before it is treated as a failure and the next endpoint is tried.
+const QUERY_ATTEMPT_TIMEOUT: Duration = Duration::from_secs(10);
+
 /// The outcome of a query attempted across a list of fallback gRPC endpoints:
-/// the final result, plus the endpoint that produced it (the one that
-/// succeeded, or the last one tried if all of them failed).
+/// the final result, the endpoint that produced it (the one that succeeded,
+/// or the last one tried if all of them failed), and the full list of
+/// endpoints attempted with whether each one succeeded. Callers should use
+/// `attempts` (rather than just `grpc_addr`) to update per-endpoint metrics,
+/// so an endpoint that failed before a later one succeeded is still marked
+/// as failing instead of keeping a stale "healthy" reading.
 pub struct QueryOutcome<T> {
     pub result: Result<T>,
     pub grpc_addr: String,
+    pub attempts: Vec<(String, bool)>,
 }
 
 /// Runs `attempt` against each entry of `grpc_addrs` in order, returning as
-/// soon as one succeeds. Every failed attempt is logged with its endpoint
-/// before moving on to the next one.
+/// soon as one succeeds. Each attempt is bounded by `QUERY_ATTEMPT_TIMEOUT`
+/// (covering both the gRPC connect and the call itself), so an endpoint that
+/// accepts a connection and then hangs doesn't block failover to the rest of
+/// the list. Every failed attempt is logged with its endpoint before moving
+/// on to the next one.
 async fn query_with_failover<T, F, Fut>(grpc_addrs: &[String], mut attempt: F) -> QueryOutcome<T>
 where
     F: FnMut(String) -> Fut,
     Fut: std::future::Future<Output = Result<T>>,
 {
+    let mut attempts = Vec::with_capacity(grpc_addrs.len());
     let mut last_addr = grpc_addrs.first().cloned().unwrap_or_default();
     let mut last_err: Option<anyhow::Error> = None;
 
     for grpc_addr in grpc_addrs {
         last_addr = grpc_addr.clone();
-        match attempt(grpc_addr.clone()).await {
+        let outcome = tokio::time::timeout(QUERY_ATTEMPT_TIMEOUT, attempt(grpc_addr.clone()))
+            .await
+            .unwrap_or_else(|_| {
+                Err(anyhow::anyhow!(
+                    "timed out after {:?}",
+                    QUERY_ATTEMPT_TIMEOUT
+                ))
+            });
+
+        match outcome {
             Ok(value) => {
+                attempts.push((last_addr.clone(), true));
                 return QueryOutcome {
                     result: Ok(value),
                     grpc_addr: last_addr,
-                }
+                    attempts,
+                };
             }
             Err(err) => {
                 warn!(
                     "gRPC query via {} failed: {}; trying next endpoint if available",
                     grpc_addr, err
                 );
+                attempts.push((last_addr.clone(), false));
                 last_err = Some(err);
             }
         }
@@ -56,6 +81,7 @@ where
     QueryOutcome {
         result: Err(last_err.unwrap_or_else(|| anyhow::anyhow!("grpc_addrs is empty"))),
         grpc_addr: last_addr,
+        attempts,
     }
 }
 
