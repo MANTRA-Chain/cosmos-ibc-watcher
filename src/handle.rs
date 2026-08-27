@@ -3,27 +3,32 @@ use duration_str::parse;
 use ibc_relayer_types::Height;
 use log::{error, info, warn};
 use std::{sync::Arc, time::Duration};
-use tendermint_rpc::Url;
 
 pub async fn ibc_status_collector(config: config::Config) {
     for chain_config in config.chains.iter() {
-        let grpc_addr = chain_config.grpc_addr.clone();
+        let grpc_addrs: Arc<Vec<String>> = Arc::new(
+            chain_config
+                .grpc_addrs
+                .iter()
+                .map(|url| url.to_string())
+                .collect(),
+        );
         let chain_id = chain_config.id.clone();
         let halt = Arc::new(tokio::sync::Mutex::new(false));
         tokio::task::spawn(track_query_node_sync_status(
-            grpc_addr.clone(),
+            grpc_addrs.clone(),
             chain_id.clone(),
             halt.clone(),
         ));
         for chain_channel in chain_config.channels.clone().iter() {
             tokio::task::spawn(track_ibc_status(
-                grpc_addr.clone(),
+                grpc_addrs.clone(),
                 chain_id.clone(),
                 chain_channel.clone(),
                 halt.clone(),
             ));
             tokio::task::spawn(track_ibc_client_status(
-                grpc_addr.clone(),
+                grpc_addrs.clone(),
                 chain_id.clone(),
                 chain_channel.clone(),
             ));
@@ -42,7 +47,7 @@ pub async fn ibc_status_collector(config: config::Config) {
 }
 
 pub async fn track_ibc_client_status(
-    grpc_addr: Url,
+    grpc_addrs: Arc<Vec<String>>,
     chain_id: String,
     chain_channel: config::Channel,
 ) {
@@ -64,20 +69,16 @@ pub async fn track_ibc_client_status(
 
         if trusting_period.is_none() {
             info!("The trusting_period is not set, fetching from the chain");
-            trusting_period = match query::get_trusting_period(
-                port_id.into(),
-                channel_id.into(),
-                grpc_addr.to_string(),
-            )
-            .await
-            {
+            let outcome =
+                query::get_trusting_period(port_id.into(), channel_id.into(), &grpc_addrs).await;
+            trusting_period = match outcome.result {
                 Ok(d) => {
                     ibc_query_status_setter(
                         &chain_id,
                         port_id,
                         channel_id,
                         destination_chain_id,
-                        &grpc_addr.to_string(),
+                        &outcome.grpc_addr,
                         0,
                     );
                     info!("The trusting_period={:?} with channel_id ({}) with destination_chain_id {} on ({})", d, channel_id, destination_chain_id, chain_id);
@@ -90,7 +91,7 @@ pub async fn track_ibc_client_status(
                         port_id,
                         channel_id,
                         destination_chain_id,
-                        &grpc_addr.to_string(),
+                        &outcome.grpc_addr,
                         1,
                     );
                     continue;
@@ -103,20 +104,20 @@ pub async fn track_ibc_client_status(
             min_time_before_client_expiration = Some(trusting_period.unwrap() / 3);
         }
 
-        let channel_client_state_height = match query::get_latest_channel_client_state_height(
+        let outcome = query::get_latest_channel_client_state_height(
             port_id.into(),
             channel_id.into(),
-            grpc_addr.to_string(),
+            &grpc_addrs,
         )
-        .await
-        {
+        .await;
+        let channel_client_state_height = match outcome.result {
             Ok(height) => {
                 ibc_query_status_setter(
                     &chain_id,
                     port_id,
                     channel_id,
                     destination_chain_id,
-                    &grpc_addr.to_string(),
+                    &outcome.grpc_addr,
                     0,
                 );
                 height
@@ -128,7 +129,7 @@ pub async fn track_ibc_client_status(
                     port_id,
                     channel_id,
                     destination_chain_id,
-                    &grpc_addr.to_string(),
+                    &outcome.grpc_addr,
                     1,
                 );
                 continue;
@@ -138,44 +139,43 @@ pub async fn track_ibc_client_status(
         if channel_client_state_height.revision_height()
             > last_channel_client_state_height.revision_height()
         {
-            let channel_client_consensus_state_duration =
-                match query::get_latest_channel_client_consensus_state_duration(
-                    port_id.into(),
-                    channel_id.into(),
-                    channel_client_state_height,
-                    grpc_addr.to_string(),
-                )
-                .await
-                {
-                    Ok(duration) => {
-                        ibc_query_status_setter(
-                            &chain_id,
-                            port_id,
-                            channel_id,
-                            destination_chain_id,
-                            &grpc_addr.to_string(),
-                            0,
-                        );
-                        info!(
-                            "The channel_client_consensus_state_duration={:?} with channel_id ({}) with destination_chain_id {} on ({})",
-                            duration, channel_id, destination_chain_id, chain_id
-                        );
-                        last_channel_client_state_height = channel_client_state_height;
-                        duration
-                    }
-                    Err(e) => {
-                        error!("{} and retry next refresh", e);
-                        ibc_query_status_setter(
-                            &chain_id,
-                            port_id,
-                            channel_id,
-                            destination_chain_id,
-                            &grpc_addr.to_string(),
-                            1,
-                        );
-                        continue;
-                    }
-                };
+            let outcome = query::get_latest_channel_client_consensus_state_duration(
+                port_id.into(),
+                channel_id.into(),
+                channel_client_state_height,
+                &grpc_addrs,
+            )
+            .await;
+            let channel_client_consensus_state_duration = match outcome.result {
+                Ok(duration) => {
+                    ibc_query_status_setter(
+                        &chain_id,
+                        port_id,
+                        channel_id,
+                        destination_chain_id,
+                        &outcome.grpc_addr,
+                        0,
+                    );
+                    info!(
+                        "The channel_client_consensus_state_duration={:?} with channel_id ({}) with destination_chain_id {} on ({})",
+                        duration, channel_id, destination_chain_id, chain_id
+                    );
+                    last_channel_client_state_height = channel_client_state_height;
+                    duration
+                }
+                Err(e) => {
+                    error!("{} and retry next refresh", e);
+                    ibc_query_status_setter(
+                        &chain_id,
+                        port_id,
+                        channel_id,
+                        destination_chain_id,
+                        &outcome.grpc_addr,
+                        1,
+                    );
+                    continue;
+                }
+            };
 
             last_channel_client_consensus_state_duration =
                 Some(channel_client_consensus_state_duration);
@@ -260,7 +260,7 @@ fn update_ibc_client_status(
 }
 
 pub async fn track_ibc_status(
-    grpc_addr: Url,
+    grpc_addrs: Arc<Vec<String>>,
     chain_id: String,
     chain_channel: config::Channel,
     halt: Arc<tokio::sync::Mutex<bool>>,
@@ -286,20 +286,17 @@ pub async fn track_ibc_status(
             );
             continue;
         }
-        total = match query::get_packet_commitments_total(
-            port_id.into(),
-            channel_id.into(),
-            grpc_addr.to_string(),
-        )
-        .await
-        {
+        let outcome =
+            query::get_packet_commitments_total(port_id.into(), channel_id.into(), &grpc_addrs)
+                .await;
+        total = match outcome.result {
             Ok(total) => {
                 ibc_query_status_setter(
                     &chain_id,
                     port_id,
                     channel_id,
                     destination_chain_id,
-                    &grpc_addr.to_string(),
+                    &outcome.grpc_addr,
                     0,
                 );
                 total
@@ -311,7 +308,7 @@ pub async fn track_ibc_status(
                     port_id,
                     channel_id,
                     destination_chain_id,
-                    &grpc_addr.to_string(),
+                    &outcome.grpc_addr,
                     1,
                 );
                 continue;
@@ -353,7 +350,7 @@ pub async fn track_ibc_status(
 }
 
 pub async fn track_query_node_sync_status(
-    grpc_addr: Url,
+    grpc_addrs: Arc<Vec<String>>,
     chain_id: String,
     halt: Arc<tokio::sync::Mutex<bool>>,
 ) {
@@ -364,10 +361,14 @@ pub async fn track_query_node_sync_status(
     loop {
         collect_interval.tick().await;
 
-        let current_height = match query::get_latest_height(grpc_addr.to_string()).await {
+        let outcome = query::get_latest_height(&grpc_addrs).await;
+        let current_height = match outcome.result {
             Ok(height) => height,
             Err(e) => {
-                error!("{} and retry next refresh", e);
+                error!(
+                    "{} (last tried {}) and retry next refresh",
+                    e, outcome.grpc_addr
+                );
                 continue;
             }
         };

@@ -53,7 +53,7 @@ impl Default for PrometheusConfig {
 #[serde(deny_unknown_fields)]
 pub struct ChainConfig {
     pub id: String,
-    pub grpc_addr: tendermint_rpc::Url,
+    pub grpc_addrs: Vec<tendermint_rpc::Url>,
     #[serde(default = "Vec::new", skip_serializing_if = "Vec::is_empty")]
     pub channels: Vec<Channel>,
 }
@@ -76,6 +76,7 @@ pub fn load(path: impl AsRef<Path>) -> Result<Config, Error> {
 
     let config = toml::from_str::<Config>(&config_toml[..]).map_err(Error::config_decode)?;
     check_parse_u64(config.clone())?;
+    check_grpc_addrs(&config)?;
     Ok(config)
 }
 
@@ -87,6 +88,16 @@ pub fn check_parse_u64(config: Config) -> Result<(), Error> {
                 .min_total
                 .parse::<u64>()
                 .map_err(Error::config_parse_u64)?;
+        }
+    }
+    Ok(())
+}
+
+// Make sure every chain configures at least one grpc_addrs entry
+pub fn check_grpc_addrs(config: &Config) -> Result<(), Error> {
+    for chain_config in config.chains.iter() {
+        if chain_config.grpc_addrs.is_empty() {
+            return Err(Error::empty_grpc_addrs(chain_config.id.clone()));
         }
     }
     Ok(())
@@ -135,6 +146,18 @@ mod tests {
         let path = concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/tests/config/fixtures/chains-fail.toml"
+        );
+
+        let config = load(path);
+        println!("{:?}", config);
+        assert!(config.is_err());
+    }
+
+    #[test]
+    fn parse_empty_grpc_addrs_config() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/config/fixtures/chains-empty-grpc-addrs.toml"
         );
 
         let config = load(path);

@@ -25,7 +25,7 @@ port = 9090
 
 [[chains]]
 id = 'chain_A'
-grpc_addr = 'http://127.0.0.1:9090'
+grpc_addrs = ['http://127.0.0.1:9090', 'http://127.0.0.1:9091'] # tried in order; falls back to the next on failure
 [[chains.channels]]
 port_id = 'transfer'
 channel_id = 'channel-0'
@@ -42,7 +42,7 @@ min_total = '40'
 
 [[chains]]
 id = 'chain_B'
-grpc_addr = 'http://127.0.0.1:9090'
+grpc_addrs = ['http://127.0.0.1:9090', 'http://127.0.0.1:9091'] # tried in order; falls back to the next on failure
 [[chains.channels]]
 port_id = 'transfer'
 channel_id = 'channel-33'
