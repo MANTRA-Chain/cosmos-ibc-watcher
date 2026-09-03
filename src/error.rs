@@ -27,6 +27,12 @@ define_error! {
             [ TraceError<TransportError> ]
             |_| { "error in underlying transport when making gRPC call" },
 
+        EmptyGrpcAddrs
+            { chain_id: String }
+            |e| { format_args!(
+                "chain '{}' must configure at least one grpc_addrs entry", e.chain_id)
+            },
+
         GetPacketCommitmentsTotal
             |_| { format_args!(
                 "error in getting packet commitments total")
